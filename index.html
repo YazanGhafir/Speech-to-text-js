@@ -19,7 +19,10 @@
    
       <tr>
         <td></td>
-        <td><button id="startRecognizeOnceAsyncButton">Start recognition</button></td>
+        <td>
+          <button id="startRecognizeOnceAsyncButton">Start recognition</button>
+          <button id="stopRecognitionButton" disabled>Stop recognition</button>
+        </td>
       </tr>
       <tr>
         <td align="right" valign="top">Results</td>
@@ -40,23 +43,28 @@
     // status fields and start button in UI
     var phraseDiv;
     var startRecognizeOnceAsyncButton;
+    var stopRecognitionButton;
 
     // subscription key and region for speech services.
-    var subscriptionKey, serviceRegion;
+    var subscriptionKey = "6d4419b310a742ccaa7307fcb586e68f"; // Add your subscription key here
+    var serviceRegion = "westeurope"; // Replace with your service region
     var SpeechSDK;
     var recognizer;
 
     document.addEventListener("DOMContentLoaded", function () {
       startRecognizeOnceAsyncButton = document.getElementById("startRecognizeOnceAsyncButton");
-      subscriptionKey = "---";
-      serviceRegion = "westeurope";
+      stopRecognitionButton = document.getElementById("stopRecognitionButton");
       phraseDiv = document.getElementById("phraseDiv");
+
+      var recognizedText = "";
 
       startRecognizeOnceAsyncButton.addEventListener("click", function () {
         startRecognizeOnceAsyncButton.disabled = true;
-        phraseDiv.innerHTML = "";
+        stopRecognitionButton.disabled = false;
+        phraseDiv.value = "";
+        recognizedText = "";
 
-        if (subscriptionKey.value === "" || subscriptionKey.value === "subscription") {
+        if (!subscriptionKey) {
           alert("Please enter your Microsoft Cognitive Services Speech subscription key!");
           return;
         }
@@ -66,23 +74,40 @@
         var audioConfig  = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
         recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
 
-        recognizer.recognizeOnceAsync(
-          function (result) {
-            startRecognizeOnceAsyncButton.disabled = false;
-            phraseDiv.innerHTML += result.text;
-            window.console.log(result);
+        recognizer.recognizing = function (s, e) {
+          // Intermediate result
+          phraseDiv.value = recognizedText + e.result.text;
+        };
 
-            recognizer.close();
-            recognizer = undefined;
-          },
-          function (err) {
-            startRecognizeOnceAsyncButton.disabled = false;
-            phraseDiv.innerHTML += err;
-            window.console.log(err);
+        recognizer.recognized = function (s, e) {
+          if (e.result.reason == SpeechSDK.ResultReason.RecognizedSpeech) {
+            // Final result
+            recognizedText += e.result.text + "\n";
+            phraseDiv.value = recognizedText;
+          } else if (e.result.reason == SpeechSDK.ResultReason.NoMatch) {
+          }
+        };
 
-            recognizer.close();
-            recognizer = undefined;
-          });
+        recognizer.canceled = function (s, e) {
+          startRecognizeOnceAsyncButton.disabled = false;
+          stopRecognitionButton.disabled = true;
+          recognizer.stopContinuousRecognitionAsync();
+        };
+
+        recognizer.sessionStopped = function (s, e) {
+          startRecognizeOnceAsyncButton.disabled = false;
+          stopRecognitionButton.disabled = true;
+          recognizer.stopContinuousRecognitionAsync();
+        };
+
+        recognizer.startContinuousRecognitionAsync();
+      });
+
+      stopRecognitionButton.addEventListener("click", function () {
+        stopRecognitionButton.disabled = true;
+        recognizer.stopContinuousRecognitionAsync(function() {
+          startRecognizeOnceAsyncButton.disabled = false;
+        });
       });
 
       if (!!window.SpeechSDK) {
